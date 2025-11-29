@@ -11,7 +11,7 @@ app.secret_key = "neuratec_secret_key"
 # Diretórios garantidos
 os.makedirs("static", exist_ok=True)
 PROFILE_PATH = "static/profile.png"
-SOURCE_IMAGE = "/mnt/data/NeuratecLogotipo.jpg"
+SOURCE_IMAGE = "NeuratecLogotipo.jpg"
 
 # Coloca a imagem real como perfil
 try:
@@ -70,7 +70,7 @@ CHAT_PAGE = """
         <div><strong>Neuratec</strong><br><span class="text-muted" style="font-size:13px;">Responde apenas \"Hello.\"</span></div>
     </div>
 
-    <div class="card-body" style="min-height:420px;">
+    <div id="messages" class="card-body" style="min-height:420px;">
         {% for sender, text in messages %}
             {% if sender == 'user' %}
                 <div class="user-msg mb-2">{{ text }}</div>
@@ -81,14 +81,42 @@ CHAT_PAGE = """
     </div>
 
     <div class="card-footer">
-        <form method="post">
-            <div class="input-group">
-                <input name="msg" class="form-control" placeholder="Digite sua mensagem..." required>
-                <button class="btn btn-primary">Enviar</button>
-            </div>
-        </form>
+        <div class="input-group">
+            <input id="msgInput" class="form-control" placeholder="Digite sua mensagem..." required>
+            <button class="btn btn-primary" onclick="sendMsg()">Enviar</button>
+        </div>
     </div>
 </div>
+
+<script>
+function appendMessage(sender, text) {
+    const box = document.getElementById('messages');
+    const div = document.createElement('div');
+    div.className = sender === 'user' ? 'user-msg mb-2' : 'bot-msg mb-2';
+    div.textContent = text;
+    box.appendChild(div);
+    box.scrollTop = box.scrollHeight;
+}
+
+function sendMsg() {
+    const input = document.getElementById('msgInput');
+    const text = input.value.trim();
+    if (!text) return;
+
+    appendMessage('user', text);
+    input.value = '';
+
+    fetch('/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ msg: text })
+    })
+    .then(r => r.json())
+    .then(data => {
+        appendMessage('bot', data.reply);
+    });
+}
+</script>
 {% endblock %}
 """
 
@@ -98,18 +126,12 @@ def index():
 
 @app.route("/chat", methods=["GET", "POST"])
 def chat():
-    if "messages" not in session:
-        session["messages"] = []
-
     if request.method == "POST":
-        msg = request.form.get("msg", "").strip()
-        if msg:
-            session["messages"].append(("user", msg))
-            session["messages"].append(("bot", "Hello."))
-            session.modified = True
-        return redirect(url_for("chat"))
+        data = request.get_json()
+        msg = data.get("msg", "").strip()
+        return {"reply": "Hello."}
 
-    return render_template_string(CHAT_PAGE, messages=session.get("messages", []), **{"base.html": BASE_TEMPLATE})
+    return render_template_string(CHAT_PAGE, messages=session.get("messages", []), **{"base.html": BASE_TEMPLATE})(CHAT_PAGE, messages=session.get("messages", []), **{"base.html": BASE_TEMPLATE})
 
 # Para Gunicorn
 application = app
@@ -117,3 +139,4 @@ application = app
 # Só inicia app.run() se explicitamente permitido
 if __name__ == "__main__" and os.getenv("RUN_FLASK_SERVER") == "1":
     app.run(host="0.0.0.0", port=5000, debug=False, use_reloader=False)
+
