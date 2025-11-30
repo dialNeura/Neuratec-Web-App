@@ -1,142 +1,193 @@
-# neuratec_app_corrected.py — versão ajustada para evitar erros em sandbox
-# Servidor Flask só inicia quando a variável de ambiente RUN_FLASK_SERVER=1 estiver ativa.
-
-from flask import Flask, render_template_string, request, redirect, url_for, session
-from PIL import Image
-import os, shutil
-
-app = Flask(__name__)
-app.secret_key = "neuratec_secret_key"
-
-# Diretórios garantidos
-os.makedirs("static", exist_ok=True)
-PROFILE_PATH = "static/profile.png"
-SOURCE_IMAGE = "NeuratecLogotipo.jpg"
-
-# Coloca a imagem real como perfil
-try:
-    if os.path.exists(SOURCE_IMAGE):
-        shutil.copy(SOURCE_IMAGE, PROFILE_PATH)
-    else:
-        img = Image.new("RGB", (800, 800), (30, 144, 255))
-        img.save(PROFILE_PATH)
-except:
-    if not os.path.exists(PROFILE_PATH):
-        with open(PROFILE_PATH, "wb") as f:
-            f.write(b"")
-
-# Templates embutidos
-BASE_TEMPLATE = """
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Neuratec</title>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
-    <style>
-        body { background:#f5f6fa; }
-        .circle-img { width:180px; height:180px; border-radius:50%; overflow:hidden; border:6px solid #2b6cb0; box-shadow:0 6px 20px rgba(43,108,176,0.18); }
-        .circle-img img { width:100%; height:100%; object-fit:cover; }
-        .chat-header-img { width:48px; height:48px; border-radius:50%; border:3px solid #fff; object-fit:cover; }
-        .bot-msg { background:#F1F1F1; padding:10px 14px; border-radius:10px; max-width:75%; }
-        .user-msg { background:#DCF8C6; padding:10px 14px; border-radius:10px; max-width:75%; margin-left:auto; }
-    </style>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Neuratec — Chat</title>
+
+<!-- Minimal, modern styling -->
+<style>
+  :root{
+    --accent:#2b6cb0;
+    --bg:#f5f7fb;
+    --card:#ffffff;
+    --bot:#f1f1f1;
+    --user:#dcf8c6;
+    --muted:#6b7280;
+    --maxWidth:880px;
+  }
+  html,body{height:100%;margin:0;font-family:Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;}
+  body{background:var(--bg);display:flex;align-items:flex-start;justify-content:center;padding:28px 12px;}
+  .app{width:100%;max-width:var(--maxWidth);}
+
+  /* Header / profile card */
+  .topbar{display:flex;align-items:center;gap:16px;margin-bottom:18px;}
+  .profile-circle{width:84px;height:84px;border-radius:50%;overflow:hidden;border:5px solid var(--accent);background:linear-gradient(180deg,#e6f0ff,#dbeffd);display:flex;align-items:center;justify-content:center;box-shadow:0 6px 18px rgba(43,108,176,0.12);}
+  .profile-circle img{width:100%;height:100%;object-fit:cover;display:block;}
+  .profile-info{display:flex;flex-direction:column;}
+  .profile-info h1{margin:0;font-size:20px;letter-spacing:-0.2px;}
+  .profile-info p{margin:6px 0 0 0;color:var(--muted);font-size:13px;}
+
+  /* Card / chat area */
+  .card{background:var(--card);border-radius:12px;box-shadow:0 8px 30px rgba(17,24,39,0.06);overflow:hidden;}
+  .chat-header{display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid #eef2f7;background:linear-gradient(180deg, rgba(255,255,255,0.6), rgba(255,255,255,1));}
+  .chat-header .avatar{width:44px;height:44px;border-radius:50%;overflow:hidden;border:3px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,0.08);}
+  .chat-header .avatar img{width:100%;height:100%;object-fit:cover;display:block;}
+  .chat-header .meta{display:flex;flex-direction:column;}
+  .chat-header .meta .name{font-weight:600;}
+  .chat-header .meta .desc{color:var(--muted);font-size:13px;}
+
+  /* Messages */
+  .messages{padding:18px;max-height:60vh;overflow:auto;display:flex;flex-direction:column;gap:8px;}
+  .msg-row{display:flex;align-items:flex-start;gap:8px;}
+  .msg-row.user{justify-content:flex-end;}
+  .user-msg{background:var(--user);padding:10px 14px;border-radius:12px;border-bottom-right-radius:4px;max-width:78%;word-break:break-word;box-shadow:0 1px 0 rgba(0,0,0,0.02);}
+  .bot-msg{background:var(--bot);padding:10px 14px;border-radius:12px;border-bottom-left-radius:4px;max-width:78%;word-break:break-word;display:inline-block;}
+  .bot-line img{width:28px;height:28px;border-radius:50%;object-fit:cover;border:2px solid #fff;box-shadow:0 1px 6px rgba(0,0,0,0.06);}
+
+  /* Input */
+  .composer{display:flex;gap:8px;padding:12px;border-top:1px solid #eef2f7;background:#fff;align-items:center;}
+  .composer input[type="text"]{flex:1;padding:10px 12px;border-radius:10px;border:1px solid #e6eaf0;font-size:14px;}
+  .composer button{background:var(--accent);color:#fff;border:none;padding:10px 14px;border-radius:10px;cursor:pointer;font-weight:600;}
+  .composer button:active{transform:translateY(1px);}
+
+  /* responsive */
+  @media (max-width:520px){
+    .profile-circle{width:64px;height:64px}
+    .chat-header .meta .name{font-size:15px}
+    .messages{max-height:54vh}
+  }
+
+  /* fallback avatar when image missing */
+  .fallback-avatar{display:flex;align-items:center;justify-content:center;font-weight:700;color:rgba(255,255,255,0.95);background:linear-gradient(135deg,#2b6cb0,#1d4e89);width:100%;height:100%}
+</style>
 </head>
-<body class="bg-light">
-    <div class="container py-4">{% block content %}{% endblock %}</div>
-</body>
-</html>
-"""
-
-INDEX_PAGE = """
-{% extends "base.html" %}
-{% block content %}
-<div class="text-center">
-    <div class="circle-img mx-auto mb-3"><img src="{{ url_for('static', filename='profile.png') }}"></div>
-    <h2>Neuratec</h2>
-    <p class="text-muted">9.654 seguidores</p>
-    <a href="{{ url_for('chat') }}" class="btn btn-primary btn-lg mt-3">Chat</a>
-</div>
-{% endblock %}
-"""
-
-CHAT_PAGE = """
-{% extends "base.html" %}
-{% block content %}
-<div class="card shadow-sm">
-    <div class="card-header d-flex align-items-center gap-3">
-        <img src="{{ url_for('static', filename='profile.png') }}" class="chat-header-img">
-        <div><strong>Neuratec</strong><br><span class="text-muted" style="font-size:13px;">Responde apenas \"Hello.\"</span></div>
+<body>
+  <div class="app">
+    <!-- Profile / header -->
+    <div class="topbar">
+      <div class="profile-circle" id="profileCircle">
+        <!-- Put the chatbot image file named exactly "NeuratecLogotipo.jpg" (or profile.png) alongside this HTML -->
+        <img id="profileImg" src="NeuratecLogotipo.jpg" alt="Neuratec Logo" onerror="fallbackProfile(this)">
+      </div>
+      <div class="profile-info">
+        <h1>Neuratec</h1>
+        <p>9.654 seguidores</p>
+      </div>
     </div>
 
-    <div id="messages" class="card-body" style="min-height:420px;">
-        {% for sender, text in messages %}
-            {% if sender == 'user' %}
-                <div class="user-msg mb-2">{{ text }}</div>
-            {% else %}
-                <div class="bot-msg mb-2">{{ text }}</div>
-            {% endif %}
-        {% endfor %}
-    </div>
-
-    <div class="card-footer">
-        <div class="input-group">
-            <input id="msgInput" class="form-control" placeholder="Digite sua mensagem..." required>
-            <button class="btn btn-primary" onclick="sendMsg()">Enviar</button>
+    <!-- Chat card -->
+    <div class="card">
+      <div class="chat-header">
+        <div class="avatar">
+          <img id="headerAvatar" src="NeuratecLogotipo.jpg" alt="Neuratec" onerror="fallbackSmall(this)">
         </div>
+        <div class="meta">
+          <div class="name">Neuratec</div>
+          <div class="desc">Responde apenas "Hello."</div>
+        </div>
+      </div>
+
+      <!-- Messages area -->
+      <div id="messages" class="messages" aria-live="polite" aria-atomic="false">
+        <!-- initial bot greeting (optional) -->
+        <div class="msg-row bot-line">
+          <img src="NeuratecLogotipo.jpg" alt="avatar" onerror="this.style.display='none'">
+          <div class="bot-msg">Olá — envie qualquer mensagem e eu responderei com <strong>Hello.</strong></div>
+        </div>
+      </div>
+
+      <!-- Composer (no page reload, single-page UX) -->
+      <div class="composer" role="region" aria-label="Compositor de mensagem">
+        <input id="msgInput" type="text" placeholder="Digite sua mensagem..." aria-label="Mensagem">
+        <button id="sendBtn" type="button">Enviar</button>
+      </div>
     </div>
-</div>
+  </div>
 
 <script>
-function appendMessage(sender, text) {
-    const box = document.getElementById('messages');
-    const div = document.createElement('div');
-    div.className = sender === 'user' ? 'user-msg mb-2' : 'bot-msg mb-2';
-    div.textContent = text;
-    box.appendChild(div);
-    box.scrollTop = box.scrollHeight;
+/*
+  Single-page chat logic:
+  - No redirects
+  - When user clicks "Enviar" (or presses Enter), the message is appended locally
+  - Bot replies with exactly "Hello."
+  - Profile image used inline from file "NeuratecLogotipo.jpg"
+*/
+
+const messagesEl = document.getElementById('messages');
+const inputEl = document.getElementById('msgInput');
+const sendBtn = document.getElementById('sendBtn');
+
+// Append user or bot message
+function appendMessage(kind, text) {
+  const row = document.createElement('div');
+  row.className = 'msg-row ' + (kind === 'user' ? 'user' : 'bot-line');
+
+  if (kind === 'bot') {
+    // avatar + bot bubble
+    const img = document.createElement('img');
+    img.src = 'NeuratecLogotipo.jpg';
+    img.alt = 'Neuratec';
+    img.style.width = '28px';
+    img.style.height = '28px';
+    img.style.borderRadius = '50%';
+    img.style.marginRight = '8px';
+    img.style.objectFit = 'cover';
+    img.onerror = function(){ this.style.display='none'; };
+
+    const bubble = document.createElement('div');
+    bubble.className = 'bot-msg';
+    bubble.innerHTML = text;
+
+    row.appendChild(img);
+    row.appendChild(bubble);
+  } else {
+    // user bubble on right
+    const bubble = document.createElement('div');
+    bubble.className = 'user-msg';
+    bubble.textContent = text;
+    row.appendChild(bubble);
+  }
+
+  messagesEl.appendChild(row);
+  messagesEl.scrollTop = messagesEl.scrollHeight;
 }
 
-function sendMsg() {
-    const input = document.getElementById('msgInput');
-    const text = input.value.trim();
-    if (!text) return;
+// Main send function — does not redirect
+function sendMessage() {
+  const txt = inputEl.value.trim();
+  if (!txt) return;
+  appendMessage('user', txt);
+  inputEl.value = '';
+  inputEl.focus();
 
-    appendMessage('user', text);
-    input.value = '';
+  // simulate tiny delay to feel natural
+  setTimeout(() => {
+    appendMessage('bot', 'Hello.');
+  }, 250);
+}
 
-    fetch('/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ msg: text })
-    })
-    .then(r => r.json())
-    .then(data => {
-        appendMessage('bot', data.reply);
-    });
+// Enter key sends
+inputEl.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    sendMessage();
+  }
+});
+sendBtn.addEventListener('click', sendMessage);
+
+// Fallback if image not found — replace with colored initials
+function fallbackProfile(imgEl) {
+  const outer = document.getElementById('profileCircle');
+  outer.innerHTML = '';
+  const fallback = document.createElement('div');
+  fallback.className = 'fallback-avatar';
+  fallback.textContent = 'N';
+  outer.appendChild(fallback);
+}
+function fallbackSmall(imgEl) {
+  imgEl.style.display = 'none';
 }
 </script>
-{% endblock %}
-"""
-
-@app.route("/")
-def index():
-    return render_template_string(INDEX_PAGE, **{"base.html": BASE_TEMPLATE})
-
-@app.route("/chat", methods=["GET", "POST"])
-def chat():
-    if request.method == "POST":
-        data = request.get_json()
-        msg = data.get("msg", "").strip()
-        return {"reply": "Hello."}
-
-    return render_template_string(CHAT_PAGE, messages=session.get("messages", []), **{"base.html": BASE_TEMPLATE})(CHAT_PAGE, messages=session.get("messages", []), **{"base.html": BASE_TEMPLATE})
-
-# Para Gunicorn
-application = app
-
-# Só inicia app.run() se explicitamente permitido
-if __name__ == "__main__" and os.getenv("RUN_FLASK_SERVER") == "1":
-    app.run(host="0.0.0.0", port=5000, debug=False, use_reloader=False)
-
+</body>
+</html>
