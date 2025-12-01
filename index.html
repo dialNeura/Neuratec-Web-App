@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+<<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8" />
@@ -48,6 +48,12 @@
             display:none;
             margin-top:30px;
         }
+
+        /* NOVO: Caixa de mensagens fixa com rolagem interna */
+        #messages {
+            height:420px !important;
+            overflow-y:auto;
+        }
     </style>
 </head>
 <body>
@@ -85,7 +91,7 @@
                 </div>
             </div>
 
-            <div id="messages" class="card-body" style="min-height:420px;"></div>
+            <div id="messages" class="card-body"></div>
 
             <div class="card-footer">
                 <div class="input-group">
@@ -117,6 +123,8 @@ function loadMessages() {
     const saved = localStorage.getItem("neuratec_chat");
     if (saved) {
         document.getElementById("messages").innerHTML = saved;
+        const box = document.getElementById("messages");
+        box.scrollTop = box.scrollHeight;
     }
 }
 
@@ -157,9 +165,11 @@ function appendMessage(sender, text) {
     }
 
     box.appendChild(div);
+
+    // Mantém scroll sempre no final
     box.scrollTop = box.scrollHeight;
 
-    saveMessages(); // salva automaticamente
+    saveMessages(); // Salva automaticamente
 }
 
 
