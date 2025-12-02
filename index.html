@@ -54,31 +54,16 @@
             height:420px !important;
             overflow-y:auto;
         }
-
-        .typing {
-            font-style: italic;
-            color: #6c757d;
-            margin-bottom: 8px;
-        }
-
-        /* Área extra de controle */
-        #controls {
-            margin-top: 18px;
-        }
-
-        .control-card {
-            background: #ffffff;
-            border-radius: 8px;
-            padding: 12px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.04);
-        }
     </style>
 </head>
 <body>
 
 <div class="container py-4">
 
-    <!-- INTERFACE PRINCIPAL -->
+    <!-- =============================== -->
+    <!--        INTERFACE PRINCIPAL      -->
+    <!-- =============================== -->
+
     <div class="text-center">
         <div class="circle-img mx-auto mb-3">
             <img src="NeuratecLogotipo.jpg" alt="Foto do perfil">
@@ -92,14 +77,17 @@
         </button>
     </div>
 
-    <!-- ÁREA DO CHAT -->
+    <!-- =============================== -->
+    <!--   ÁREA DO CHAT (MESMA PÁGINA)   -->
+    <!-- =============================== -->
+
     <div id="chatBox">
         <div class="card shadow-sm mt-4">
             <div class="card-header d-flex align-items-center gap-3">
                 <img src="NeuratecLogotipo.jpg" class="chat-header-img">
                 <div>
                     <strong>Neuratec</strong><br>
-                    <span class="text-muted" style="font-size:13px;">Robô virtual — modo Sandbox</span>
+                    <span class="text-muted" style="font-size:13px;">Responde apenas "Hello."</span>
                 </div>
             </div>
 
@@ -107,32 +95,8 @@
 
             <div class="card-footer">
                 <div class="input-group">
-                    <input id="msgInput" class="form-control" placeholder="Digite sua mensagem..." required
-                           onkeydown="if(event.key==='Enter'){ sendMsg(); }">
+                    <input id="msgInput" class="form-control" placeholder="Digite sua mensagem..." required>
                     <button class="btn btn-primary" onclick="sendMsg()">Enviar</button>
-                </div>
-            </div>
-        </div>
-
-        <!-- NOVA ÁREA: Controles e ações rápidas -->
-        <div id="controls" class="mt-3">
-            <div class="control-card">
-                <h5>Controles rápidos</h5>
-                <p class="text-muted">Ações rápidas para testar o simulador virtual.</p>
-                <div class="d-flex gap-2 flex-wrap">
-                    <button class="btn btn-outline-primary" onclick="sendQuick('Simular cell_alpha 5s')">Simular cell_alpha 5s</button>
-                    <button class="btn btn-outline-primary" onclick="sendQuick('Simular cell_alpha 15s')">Simular 15s</button>
-                    <button class="btn btn-outline-secondary" onclick="sendQuick('Status')">Status</button>
-                    <button class="btn btn-outline-secondary" onclick="sendQuick('Listar dispositivos')">Listar dispositivos</button>
-                    <button class="btn btn-outline-success" onclick="sendQuick('Energia cell_alpha 10s')">Energia 10s</button>
-                </div>
-
-                <hr>
-
-                <h6>Comando manual</h6>
-                <div class="input-group">
-                    <input id="cmdInput" class="form-control" placeholder="ex: Simular cell_alpha 8s">
-                    <button class="btn btn-dark" onclick="sendCmd()">Executar</button>
                 </div>
             </div>
         </div>
@@ -140,12 +104,21 @@
 
 </div>
 
+<!-- =============================== -->
+<!--           JAVASCRIPT            -->
+<!-- =============================== -->
+
 <script>
-/* Persistência local das mensagens */
+
+// -----------------------------
+// Persistência das conversas
+// -----------------------------
+
 function saveMessages() {
     const messages = document.getElementById("messages").innerHTML;
     localStorage.setItem("neuratec_chat", messages);
 }
+
 function loadMessages() {
     const saved = localStorage.getItem("neuratec_chat");
     if (saved) {
@@ -155,10 +128,15 @@ function loadMessages() {
     }
 }
 
-/* Toggle chat */
+
+// -----------------------------
+// Abrir/fechar chat
+// -----------------------------
+
 function toggleChat() {
     const box = document.getElementById("chatBox");
-    if (box.style.display === "none" || box.style.display === "") {
+
+    if (box.style.display === "none") {
         box.style.display = "block";
         window.scrollTo(0, document.body.scrollHeight);
     } else {
@@ -166,7 +144,11 @@ function toggleChat() {
     }
 }
 
-/* Append messages */
+
+// -----------------------------
+// Inserção das mensagens
+// -----------------------------
+
 function appendMessage(sender, text) {
     const box = document.getElementById('messages');
     const div = document.createElement('div');
@@ -174,6 +156,7 @@ function appendMessage(sender, text) {
     if (sender === "user") {
         div.className = "user-msg mb-2";
         div.textContent = text;
+
     } else { // bot
         div.className = "d-flex align-items-start mb-2";
         div.innerHTML =
@@ -182,101 +165,38 @@ function appendMessage(sender, text) {
     }
 
     box.appendChild(div);
+
+    // Mantém scroll sempre no final
     box.scrollTop = box.scrollHeight;
-    saveMessages();
+
+    saveMessages(); // Salva automaticamente
 }
 
-/* WebSocket client */
-const WS_URL = (location.protocol === "https:" ? "wss" : "ws") + "://" + location.host + "/ws";
-let socket;
-let connected = false;
 
-function setupSocket() {
-    socket = new WebSocket(WS_URL);
-
-    socket.addEventListener('open', () => {
-        connected = true;
-        console.log("Conectado ao backend Neuratec");
-    });
-
-    socket.addEventListener('message', (ev) => {
-        try {
-            const msg = JSON.parse(ev.data);
-            if (msg.type === "typing") {
-                showTyping(msg.text || "Neuratec está pensando...");
-                return;
-            }
-            removeTyping();
-            if (msg.sender && msg.text) appendMessage(msg.sender, msg.text);
-        } catch (e) {
-            console.error("Mensagem inválida", e);
-        }
-    });
-
-    socket.addEventListener('close', () => {
-        connected = false;
-        console.log("Socket fechado, tentando reconectar em 1s");
-        setTimeout(setupSocket, 1000);
-    });
-
-    socket.addEventListener('error', (err) => {
-        console.error("Erro no socket", err);
-        socket.close();
-    });
-}
+// -----------------------------
+// Enviar mensagem
+// -----------------------------
 
 function sendMsg() {
     const input = document.getElementById("msgInput");
     const text = input.value.trim();
     if (!text) return;
-    if (!connected) {
-        appendMessage("bot", "Conexão indisponível. Tentando reconectar...");
-        return;
-    }
+
     appendMessage("user", text);
     input.value = "";
-    socket.send(JSON.stringify({type: "message", text}));
+
+    setTimeout(() => {
+        appendMessage("bot", "Hello.");
+    }, 200);
 }
 
-/* Quick controls */
-function sendQuick(cmd) {
-    if (!connected) {
-        appendMessage("bot", "Conexão indisponível. Tentando reconectar...");
-        return;
-    }
-    appendMessage("user", cmd);
-    socket.send(JSON.stringify({type: "message", text: cmd}));
-}
 
-function sendCmd() {
-    const cmd = document.getElementById("cmdInput").value.trim();
-    if (!cmd) return;
-    sendQuick(cmd);
-    document.getElementById("cmdInput").value = "";
-}
-
-/* Typing indicator */
-function showTyping(text) {
-    removeTyping();
-    const box = document.getElementById('messages');
-    const div = document.createElement('div');
-    div.id = "typing-indicator";
-    div.className = "typing";
-    div.textContent = text;
-    box.appendChild(div);
-    box.scrollTop = box.scrollHeight;
-}
-function removeTyping() {
-    const t = document.getElementById('typing-indicator');
-    if (t) t.remove();
-}
-
-/* Load saved and setup WS */
+// -----------------------------
+// Carregar mensagens salvas ao abrir
+// -----------------------------
 loadMessages();
-setupSocket();
+
 </script>
 
 </body>
 </html>
-
-
